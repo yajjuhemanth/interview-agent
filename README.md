@@ -28,6 +28,44 @@ Agent-based Interview Question Generator using Flask, MySQL, and OpenAI GPT. Thi
 
 ## Installation
 
+### Quick Setup (Recommended)
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/yajjuhemanth/interview-agent.git
+   cd interview-agent
+   ```
+
+2. **Run the setup script**
+   ```bash
+   chmod +x setup.sh
+   ./setup.sh
+   ```
+   
+   The setup script will:
+   - Create a virtual environment
+   - Install dependencies
+   - Create `.env` file from template
+   - Optionally set up the database
+
+3. **Configure your environment**
+   Edit the `.env` file with your API key and database settings:
+   ```env
+   OPENAI_API_KEY=your_openai_api_key_here
+   MYSQL_HOST=localhost
+   MYSQL_USER=root
+   MYSQL_PASSWORD=your_password
+   MYSQL_DATABASE=interview_agent
+   ```
+
+4. **Start the application**
+   ```bash
+   source venv/bin/activate
+   python app.py
+   ```
+
+### Manual Setup
+
 1. **Clone the repository**
    ```bash
    git clone https://github.com/yajjuhemanth/interview-agent.git
@@ -69,6 +107,25 @@ Agent-based Interview Question Generator using Flask, MySQL, and OpenAI GPT. Thi
 6. **Run the application**
    ```bash
    python app.py
+   ```
+
+### Docker Setup
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/yajjuhemanth/interview-agent.git
+   cd interview-agent
+   ```
+
+2. **Configure environment for Docker**
+   ```bash
+   cp .env.docker .env
+   # Edit .env with your OpenAI API key
+   ```
+
+3. **Run with Docker Compose**
+   ```bash
+   docker-compose up --build
    ```
 
 The application will be available at `http://localhost:5000`
@@ -137,6 +194,16 @@ The application will be available at `http://localhost:5000`
 - **DELETE** `/api/questions/{id}`
 - **Description**: Delete a specific question by ID
 
+## Quick Demo
+
+To see the application in action without any setup:
+
+```bash
+python demo.py
+```
+
+This will show you how the question generation works with sample data.
+
 ## Usage
 
 ### Web Interface
@@ -172,9 +239,15 @@ interview-agent/
 ├── routes.py                 # API routes and web interface
 ├── gpt_service.py           # OpenAI GPT integration
 ├── setup_db.py             # Database setup script
+├── demo.py                  # Demo script (no setup required)
+├── test_api.py              # API testing script
+├── setup.sh                 # Quick setup script
 ├── requirements.txt         # Python dependencies
 ├── postman_collection.json  # Postman API collection
+├── Dockerfile               # Docker configuration
+├── docker-compose.yml       # Docker Compose configuration
 ├── .env.example            # Environment variables template
+├── .env.docker             # Docker environment template
 ├── .gitignore              # Git ignore file
 └── README.md               # This file
 ```
