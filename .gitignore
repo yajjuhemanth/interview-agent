@@ -1,4 +1,10 @@
 venv/
+.venv/
 __pycache__/
-*.pyc
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
 .env
+interview_agent.db
+interview_agent.db-journal
