@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Interview Agent – React UI</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+      :root { color-scheme: light dark; }
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; }
+      .container { max-width: 900px; margin: 0 auto; padding: 24px; }
+      h1 { font-size: 1.6rem; margin: 0 0 16px; }
+      form { display: grid; gap: 12px; margin-bottom: 16px; }
+      label { font-weight: 600; }
+      input[type="text"], textarea { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #9994; }
+      button { padding: 10px 14px; border-radius: 8px; border: 1px solid #7775; background: #2d6cdf; color: #fff; font-weight: 600; cursor: pointer; }
+      button[disabled] { opacity: .6; cursor: not-allowed; }
+      .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+      .card { padding: 16px; border: 1px solid #9994; border-radius: 10px; }
+      ul { margin: 8px 0 0; padding-left: 20px; }
+      .muted { opacity: .75; }
+      .error { color: #b00020; font-weight: 600; }
+      .small { font-size: .9rem; }
+      footer { margin-top: 24px; opacity: .7; }
+      code { background: #0001; padding: 2px 6px; border-radius: 6px; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="text/babel">
+      const { useState } = React;
+
+      function App() {
+        const [jobTitle, setJobTitle] = useState("");
+        const [jobDesc, setJobDesc] = useState("");
+        const [loading, setLoading] = useState(false);
+        const [error, setError] = useState(null);
+        const [result, setResult] = useState(null);
+
+        async function onSubmit(e) {
+          e.preventDefault();
+          setError(null);
+          setResult(null);
+          if (!jobTitle.trim() || !jobDesc.trim()) {
+            setError("Please fill in both Job Title and Job Description.");
+            return;
+          }
+          setLoading(true);
+          try {
+            const resp = await fetch("/agent", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ job_title: jobTitle.trim(), job_description: jobDesc.trim() })
+            });
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok) {
+              const msg = data?.error || `Request failed (${resp.status})`;
+              throw new Error(msg);
+            }
+            setResult(data);
+          } catch (err) {
+            setError(err.message || String(err));
+          } finally {
+            setLoading(false);
+          }
+        }
+
+        return (
+          <div className="container">
+            <h1>Interview Agent – React UI</h1>
+            <p className="muted small">Enter a role and description. This calls <code>POST /agent</code> and shows saved Q&A.</p>
+            <form onSubmit={onSubmit} className="card">
+              <div>
+                <label htmlFor="jobTitle">Job Title</label>
+                <input id="jobTitle" type="text" placeholder="Frontend Developer" value={jobTitle} onChange={e => setJobTitle(e.target.value)} />
+              </div>
+              <div>
+                <label htmlFor="jobDesc">Job Description</label>
+                <textarea id="jobDesc" rows={5} placeholder="ReactJS, JS, testing" value={jobDesc} onChange={e => setJobDesc(e.target.value)} />
+              </div>
+              <div>
+                <button type="submit" disabled={loading}>{loading ? "Generating..." : "Generate & Save"}</button>
+              </div>
+              {error && <div className="error">{error}</div>}
+            </form>
+
+            {result && (
+              <div className="row">
+                <div className="card">
+                  <h3>Questions</h3>
+                  {Array.isArray(result.questions) && result.questions.length ? (
+                    <ul>
+                      {result.questions.map((q, idx) => <li key={idx}>{q}</li>)}
+                    </ul>
+                  ) : (
+                    <p className="muted">No questions returned.</p>
+                  )}
+                </div>
+                <div className="card">
+                  <h3>Answers</h3>
+                  {Array.isArray(result.qa) && result.qa.length ? (
+                    <ul>
+                      {result.qa.map((pair, idx) => (
+                        <li key={idx}>
+                          <strong>{pair.question}</strong>
+                          <div className="muted small">{pair.answer}</div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="muted">No answers (AI unavailable?).</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <footer className="small">
+              Saved ID: {result?.id ?? "—"} • Source: {result?.source ?? "—"} • Created at: {result?.created_at ?? "—"}
+            </footer>
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+  </html>
