@@ -1,17 +1,17 @@
-"""Flask application entry point and HTTP routes.
+"""Flask application entry point and minimal HTTP API.
 
-Routes:
-- GET  /         : minimal HTML form
-- GET  /react    : simple React (CDN) UI for testing the agent
-- POST /generate : dev-only stubbed questions (no AI call)
-- POST /save     : persist questions and optional Q&A
-- GET  /get      : list saved records
-- POST /agent    : generate Q&A via Gemini and save in one shot
+Exposed routes:
+- POST /agent : Generate interview Q&A via Gemini and persist.
+- GET  /get   : List saved records (optionally filter by job_title).
+
+Notes:
+- A React (Vite) frontend lives under `frontend/` and calls the API above.
+- Legacy dev-only routes (/ and /react templates, /generate stub) were removed
+    to keep the app minimal and focused on the production flow.
 """
 
-import os
 import json
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify
 from typing import List
 
 from config import settings
@@ -29,57 +29,14 @@ def create_app() -> Flask:
     """
     app = Flask(__name__)
 
-    @app.get("/")
-    def index():
-        return render_template("index.html")
-
-    @app.get("/react")
-    def react_ui():
-        return render_template("react.html")
-
-    @app.route("/generate", methods=["POST"])
-    def generate():
-        # Parse and validate incoming JSON
-        data = request.get_json(silent=True) or {}
-        job_title = (data.get("job_title") or "").strip()
-        job_description = (data.get("job_description") or "").strip()
-
-        if not job_title or not job_description:
-            return (
-                jsonify({
-                    "error": "Both 'job_title' and 'job_description' are required.",
-                    "hint": {
-                        "expected": {
-                            "job_title": "string",
-                            "job_description": "string"
-                        }
-                    }
-                }),
-                400,
-            )
-
-        # Development-friendly stub: keep /generate simple and deterministic
-        questions: List[str] = [
-            f"Can you summarize your experience relevant to the {job_title} role?",
-            "Walk me through a challenging project you owned end-to-end and your impact.",
-            f"Which tools, frameworks, or technologies are most important for a {job_title}, and how have you used them?",
-            "How do you approach debugging complex issues and preventing regressions?",
-            "What would your 30/60/90-day plan look like for this position?",
-        ]
-        source = "stub"
-
-        return jsonify({
-            "job_title": job_title,
-            "job_description": job_description,
-            "questions": questions,
-            "source": source,
-        })
+    # Minimal API: only /agent and /get are exposed for the frontend
 
     # Helper for agent to persist and return compact result
-    def _save_record(job_title: str, job_description: str, questions: List[str], qa: List[dict] | None = None) -> dict:
+    def _save_record(job_title: str, job_description: str, questions: List[str], qa: dict | List[dict] | None = None) -> dict:
         """Persist a record and return minimal info for response assembly.
 
-        questions and qa are Python structures; they are serialized as JSON strings
+        questions is a list of strings. qa can be either a list of {q,a} pairs or
+        a dict keyed by levels {basic, intermediate, expert}. They are serialized as JSON
         for storage and de-serialized on reads.
         """
         questions_json = json.dumps(questions, ensure_ascii=False)
@@ -109,55 +66,14 @@ def create_app() -> Flask:
 
         agent = QuestionAgent(save_callback=_save_record)
         try:
-            result = agent.run(job_title, job_description, with_answers=True)
+            result = agent.run(job_title, job_description)
             return jsonify(result), 201
         except AIUnavailableError as e:
             return jsonify({"error": str(e)}), 503
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
-    @app.route("/save", methods=["POST"])
-    def save():
-        data = request.get_json(silent=True) or {}
-        job_title = (data.get("job_title") or "").strip()
-        job_description = (data.get("job_description") or "").strip()
-        questions = data.get("questions")
-        qa = data.get("qa")  # optional list of {question, answer}
-
-        if not job_title or not job_description:
-            return jsonify({"error": "'job_title' and 'job_description' are required."}), 400
-
-        if not isinstance(questions, list) or not all(isinstance(q, str) for q in questions):
-            return jsonify({
-                "error": "'questions' must be a list of strings.",
-                "hint": {"questions": ["Q1", "Q2", "..."]}
-            }), 400
-
-        # Serialize questions as JSON string for storage
-        questions_json = json.dumps(questions, ensure_ascii=False)
-        qa_json = None
-        if qa is not None:
-            if not isinstance(qa, list) or not all(isinstance(x, dict) and "question" in x and "answer" in x for x in qa):
-                return jsonify({
-                    "error": "'qa' must be a list of objects with 'question' and 'answer' keys.",
-                    "hint": {"qa": [{"question": "...", "answer": "..."}]}
-                }), 400
-            qa_json = json.dumps(qa, ensure_ascii=False)
-
-        with get_session() as session:
-            record = InterviewQuestion(
-                job_title=job_title,
-                job_description=job_description,
-                questions=questions_json,
-                qa=qa_json,
-            )
-            session.add(record)
-            session.flush()  # get autogenerated id
-
-            return jsonify({
-                "message": "Saved",
-                "id": record.id,
-            }), 201
+    # Note: manual /save endpoint was removed as the frontend persists via /agent
 
     @app.route("/get", methods=["GET"])
     def get_saved():

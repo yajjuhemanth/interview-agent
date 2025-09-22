@@ -2,10 +2,10 @@ from __future__ import annotations
 
 """Agent module: encapsulates AI generation and persistence orchestration.
 
-QuestionAgent is responsible for:
-- Asking Gemini to generate Q&A pairs tailored to a job title/description
-- Validating/cleaning the JSON response
-- Calling a save callback to persist results
+QuestionAgent responsibilities:
+- Ask Gemini to generate Q&A grouped by difficulty levels: basic, intermediate, expert
+- Validate/clean the JSON response
+- Persist via provided save callback
 """
 
 import json
@@ -26,17 +26,14 @@ class QuestionAgent:
     def __init__(self, save_callback):
         self._save = save_callback
 
-    def _generate_stub(self, job_title: str, job_description: str) -> List[str]:
-        return [
-            f"What most excites you about the {job_title} role?",
-            "Tell us about a time you solved a complex problem end-to-end.",
-            f"Which tools or frameworks are essential for a {job_title} and why?",
-            "How do you ensure code quality and reliability under deadlines?",
-            "Describe your 30/60/90-day plan for this role.",
-        ]
+    def generate_qa(self, job_title: str, job_description: str) -> Tuple[Dict[str, List[Dict[str, str]]], str]:
+        """Generate Q&A pairs in three levels using Gemini.
 
-    def generate_qa(self, job_title: str, job_description: str) -> Tuple[List[Dict[str, str]], str]:
-        """Generate Q&A pairs using Gemini. Raises AIUnavailableError if unavailable."""
+        Returns a tuple (qa_by_level, source) where qa_by_level is a dict with keys:
+        {"basic": [...], "intermediate": [...], "expert": [...]} and each value is a
+        list of {question, answer} objects.
+        Raises AIUnavailableError if the model is not available or response invalid.
+        """
         if not settings.gemini_api_key:
             raise AIUnavailableError("Gemini API key not configured")
 
@@ -44,11 +41,12 @@ class QuestionAgent:
             client = genai.Client(api_key=settings.gemini_api_key)
             model = settings.gemini_model
             prompt = (
-                "You generate concise, practical interview questions with strong, succinct answers.\n"
-                "Generate 8-12 Q&A pairs tailored to the role.\n"
-                "Return ONLY valid JSON with no code fences, no extra text.\n"
-                "Schema: an array of objects with keys 'question' and 'answer'.\n"
-                "Example: [{\"question\": \"...\", \"answer\": \"...\"}]\n\n"
+                "You are an expert interviewer and technical writer.\n"
+                "Task: Generate interview Q&A pairs tailored to the role below, grouped by difficulty level.\n"
+                "Levels: 'basic' (fundamentals), 'intermediate' (solid practical skills), 'expert' (deep, systems-level, or advanced).\n"
+                "Answers must be concise (2-4 sentences), precise, practical, and role-specific; no fluff, no markdown.\n"
+                "Output: ONLY valid JSON (no prose, no code fences).\n"
+                "Schema: {\n  \"basic\": [{\"question\": str, \"answer\": str}, ... 5-8],\n  \"intermediate\": [{...} 6-10],\n  \"expert\": [{...} 6-10]\n}\n\n"
                 f"Job Title: {job_title}\n"
                 f"Job Description: {job_description}\n"
             )
@@ -92,41 +90,58 @@ class QuestionAgent:
                 qa = _json.loads(cleaned)
             except Exception:
                 # Try to extract first JSON array substring
-                match = _re.search(r"\[[\s\S]*\]", cleaned)
-                if not match:
+                # If model ignored schema and returned an array, capture it; otherwise try object
+                match_obj = _re.search(r"\{[\s\S]*\}", cleaned)
+                match_arr = _re.search(r"\[[\s\S]*\]", cleaned)
+                if match_obj:
+                    qa = _json.loads(match_obj.group(0))
+                elif match_arr:
+                    qa = {"basic": _json.loads(match_arr.group(0))}
+                else:
                     raise
-                qa = _json.loads(match.group(0))
-            if not isinstance(qa, list) or not qa:
-                raise ValueError("empty or invalid JSON from Gemini")
-            qa_ok = [x for x in qa if isinstance(x, dict) and "question" in x and "answer" in x]
-            if not qa_ok:
+
+            # Normalize to dict of levels
+            levels = {"basic": [], "intermediate": [], "expert": []}
+            if isinstance(qa, dict):
+                for k in list(levels.keys()):
+                    v = qa.get(k)
+                    if isinstance(v, list):
+                        levels[k] = [x for x in v if isinstance(x, dict) and "question" in x and "answer" in x]
+            elif isinstance(qa, list):
+                levels["basic"] = [x for x in qa if isinstance(x, dict) and "question" in x and "answer" in x]
+            else:
+                raise ValueError("invalid JSON shape from Gemini")
+
+            # Ensure at least one level is non-empty
+            if not any(levels.values()):
                 raise ValueError("no valid {question,answer} objects from Gemini")
-            return qa_ok, "gemini"
+            return levels, "gemini"
         except AIUnavailableError:
             raise
         except Exception as e:
             raise AIUnavailableError(f"Gemini generation failed: {e}")
 
-    def run(self, job_title: str, job_description: str, with_answers: bool = True) -> dict:
+    def run(self, job_title: str, job_description: str) -> dict:
         job_title = (job_title or "").strip()
         job_description = (job_description or "").strip()
         if not job_title or not job_description:
             raise ValueError("job_title and job_description are required")
 
-        if with_answers:
-            qa, source = self.generate_qa(job_title, job_description)
-            qs = [x.get("question", "").strip() for x in qa if isinstance(x, dict)]
-            record = self._save(job_title, job_description, qs, qa)
-        else:
-            qs = self._generate_stub(job_title, job_description)
-            source = "stub"
-            record = self._save(job_title, job_description, qs, None)
+        qa_by_level, source = self.generate_qa(job_title, job_description)
+        # Flatten questions across all levels for simple storage and compatibility
+        flat_qs: List[str] = []
+        for arr in qa_by_level.values():
+            for x in arr:
+                q = (x.get("question") or "").strip()
+                if q:
+                    flat_qs.append(q)
+        record = self._save(job_title, job_description, flat_qs, qa_by_level)
         return {
             "id": record["id"],
             "job_title": job_title,
             "job_description": job_description,
-            "questions": qs,
-            "qa": record.get("qa") or (qa if with_answers else None),
+            "questions": flat_qs,
+            "qa": record.get("qa") or qa_by_level,
             "created_at": record.get("created_at"),
             "source": source,
         }

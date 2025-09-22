@@ -1,78 +1,42 @@
-# Interview Question Generator (Agent-based App)
+# Interview Agent (minimal)
 
-A simple Flask API that generates interview questions for a given job title and description, with optional GPT integration and MySQL persistence.
+Minimal, production-focused app to generate interview Q&A for a role.
 
-## Features
-- POST `/generate` — Generate interview questions (GPT-ready; stubbed by default)
-- POST `/save` — Save generated questions
-- GET  `/get` — Fetch saved questions
+Components:
+- Backend: Flask + SQLAlchemy (MySQL via PyMySQL or SQLite fallback) + Gemini (google-genai)
+- Frontend: Vite + React (TypeScript)
 
-## Tech
-- Python 3.10+
-- Flask
-- SQLAlchemy (MySQL via PyMySQL; SQLite fallback)
-- Gemini API
+## API (minimal)
+- POST `/agent` — Generate Q&A via Gemini and save in DB. Body: `{ job_title, job_description }`
+- GET  `/get` — List saved records (optional `?job_title=...&limit=50`)
+
+Legacy dev routes and artifacts (/generate, /save, Jinja templates, Postman/OpenAPI, smoke tests) were removed to keep the app lean.
 
 ## Setup
-1. Clone and open the folder in VS Code.
-2. Create a virtual environment and install dependencies:
+1) Python deps
+- Create a virtual env and install:
+	- requirements.txt
+2) Environment
+- .env supports: `DATABASE_URL`, `GEMINI_API_KEY`, `GEMINI_MODEL`, `PORT`
+- Examples:
+	- MySQL: `mysql+pymysql://user:password@localhost:3306/interview_agent`
+	- SQLite: `sqlite:///interview_agent.db` (default)
 
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-```
+## Run (development)
+Backend:
+- Start Flask: run `python app.py` (uses PORT, default 5000)
 
-3. Configure environment variables:
+Frontend:
+- In `frontend/`: install once with `npm install`
+- Start dev server: `npm run dev` (proxies API to http://localhost:5000)
 
-```powershell
-Copy-Item .env.example .env
-# Edit .env and set DATABASE_URL and GEMINI_API_KEY
-```
-
-- MySQL example: `mysql+pymysql://user:password@localhost:3306/interview_agent`
-- SQLite fallback: `sqlite:///interview_agent.db`
-
-## Run
-```powershell
-python app.py
-```
-Server runs on `http://localhost:5000` (PORT env can override).
-
-## Quick test
-```powershell
-$body = @{ job_title = "Software Engineer"; job_description = "Builds APIs" } | ConvertTo-Json
-Invoke-WebRequest -Uri "http://localhost:5000/generate" -Method Post -Body $body -ContentType "application/json"
-```
+Open the Vite URL printed in the terminal (default http://localhost:5173) and use the UI.
 
 ## Notes
-- `/generate` returns stubbed questions (for development).
-- `/agent` uses Gemini to generate Q&A pairs (requires `GEMINI_API_KEY`).
-- Use Postman if you prefer a UI for testing.
+- If `GEMINI_API_KEY` is not set or Gemini fails, backend returns 503 for `/agent`.
+- DB schema is created automatically; a safe migration ensures an optional `qa` column exists.
 
-## API docs
-- OpenAPI: `docs/openapi.yaml`
-- Import the Postman collection: `postman/InterviewAgent.postman_collection.json`
-
-## Smoke test (optional)
-Start the server, then run:
-
-```powershell
-python scripts/smoke_test.py
-```
-
-It will call `/generate`, `/save`, `/get` and exit with success if all good.
-
-## Troubleshooting
-- MySQL auth errors: ensure your DATABASE_URL is correct and URL-encodes special characters (e.g., `@` => `%40`).
-- MySQL user permissions: grant `ALL PRIVILEGES` on `interview_db.*` to your app user.
-- SSL/auth plugins: local dev may require `cryptography` or using `mysql_native_password` for your user.
-
-## React test UI (optional)
-You can also try a minimal React page (no build needed):
-
-1. Start the server: `python app.py`
-2. Open your browser to `http://localhost:5000/react`
-3. Enter a job title/description and submit
-	- If `GEMINI_API_KEY` is configured, Q&A will be generated and saved
-	- If not, you’ll see a handled error (503) and no answers
+## Folder overview
+- app.py, agent.py, config.py, database.py, models.py — core backend
+- frontend/ — Vite + React UI (only uses `/agent` and `/get`)
+- requirements.txt — Python dependencies
