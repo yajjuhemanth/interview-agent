@@ -1,0 +1,38 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Global background with soft gradients and subtle texture */
+body {
+	--bg1: radial-gradient(1200px 600px at 10% -10%, rgba(59,130,246,0.22), transparent 60%);
+	--bg2: radial-gradient(1000px 500px at 90% 10%, rgba(16,185,129,0.18), transparent 60%);
+	--bg3: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+	background: var(--bg1), var(--bg2), var(--bg3);
+}
+
+.container { @apply max-w-5xl mx-auto px-4 py-8 text-slate-900; }
+.card { @apply bg-white/80 border border-slate-200/70 rounded-xl shadow-sm p-6 backdrop-blur-md; }
+
+/* Buttons */
+.btn { @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg font-semibold; }
+.btn-primary { @apply text-white shadow-sm; background-image: linear-gradient(90deg, #2563eb, #7c3aed); }
+.btn-primary:hover { filter: brightness(1.05); }
+.btn-ghost { @apply text-slate-700 border border-slate-300 bg-white/70 hover:bg-white; }
+.btn:disabled { @apply opacity-60 cursor-not-allowed; }
+
+/* Inputs */
+.input { @apply w-full rounded-lg border border-slate-300 px-3 py-2 bg-white/80 focus:outline-none focus:ring-2 focus:ring-brand-400; }
+.label { @apply font-semibold; }
+.muted { @apply text-slate-500; }
+.small { @apply text-sm; }
+
+/* Q&A visuals */
+.qa-item { @apply border-l-4 pl-3; border-left-color: #60a5fa; }
+.qa-item summary { @apply cursor-pointer; }
+.qa-item:hover summary { @apply text-slate-900; }
+.answer { @apply mt-2 text-slate-600; }
+
+/* Hero */
+.hero { @apply rounded-2xl p-6 text-white shadow-sm; background-image: linear-gradient(135deg, #1d4ed8, #0ea5e9, #10b981); }
+.hero h1 { @apply text-3xl font-extrabold tracking-tight; }
+.hero p { @apply opacity-90; }
